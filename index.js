@@ -13,7 +13,7 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'https://meresu-chatfront.vercel.app/', // Adjust to your frontend URL
+    origin: 'https://meresu-chatfront.vercel.app/chat', // Adjust to your frontend URL
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type'],
     credentials: true
