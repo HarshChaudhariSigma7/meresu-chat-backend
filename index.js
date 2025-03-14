@@ -13,7 +13,7 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'https://meresu-chatfront.vercel.app', // Adjust to your frontend URL
+    origin: 'http://localhost:3000', // Adjust to your frontend URL
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type'],
     credentials: true
@@ -115,38 +115,62 @@ async function parseOptions(output) {
 async function queryDeepseek(userMessage) {
   const apiKey = process.env.DEEPSEEK_API_KEY; // Ensure your API key is stored securely
   const endpoint = 'https://api.deepseek.com/v1/chat/completions'; // Replace with the actual endpoint
-if (!apiKey) {
+  
+  if (!apiKey) {
     throw new Error("DeepseekAPI key is missing. Check your environment variables.");
   }
 
-  const systemPrompt = `
-"You are a senior sales strategist tasked with engineering high-stakes, psychologically nuanced dialogue paths. Dissect the conversation history, client’s latent motivations (inferred from verbal/nonverbal patterns), and business objectives. Generate 3 surgical conversation continuations that manipulate the trajectory toward closure while maintaining deniable plausibility.
+  // Extract messages and goal if provided in the new format
+  let messages = userMessage;
+  let goal = "";
+  
+  if (userMessage && typeof userMessage === 'object' && userMessage.messages) {
+    messages = userMessage.messages;
+    goal = userMessage.goal || "";
+  }
 
-Strategic Framework (Internal Analysis - DO NOT OUTPUT):
+  const systemPrompt = `You are a senior sales strategist tasked with engineering high-stakes, psychologically nuanced dialogue paths. Dissect the conversation history, client's latent motivations (inferred from verbal/nonverbal patterns), and business objectives.
 
-Anticipatory Objection Mitigation: Identify 2-3 probable unspoken barriers (budget scars, authority chains, competitor traps) and preemptively neutralize them through embedded framing.
-Value Asymmetry: Force-rank the client’s implicit priorities (ROI timelines, risk aversion, political capital) against the product’s irreversible advantages.
-Temporal Anchoring: Map responses to create urgency/time-sensitivity illusions without explicit deadlines.
-Tone-Blending: Mirror the client’s communication archetype (Analyst/Charismatic/Decider) while layering subtle dominance cues (conditional phrasing, strategic pauses implied through punctuation).
+${goal ? `"${goal}". All generated options must strategically advance this goal.` : ''}
+
+Generate 3 surgical conversation continuations that manipulate the trajectory toward closure while maintaining deniable plausibility. Each option must:
+
+Anticipate and neutralize unspoken barriers (e.g., budget concerns, authority chains, competitor traps) through embedded framing.
+
+Leverage value asymmetry by aligning the client's implicit priorities (ROI timelines, risk aversion, political capital) with the product's irreversible advantages.
+
+Create temporal urgency without explicit deadlines, using subtle time-sensitivity cues.
+
+Blend tone by mirroring the client's communication archetype (Analyst/Charismatic/Decider) while layering subtle dominance cues (conditional phrasing, strategic pauses implied through punctuation).
+
 Critical Constraints:
 
 Zero speculative offers: All value propositions must derive directly from pre-approved battle cards.
-Steel-manned neutrality: Responses must pass adversarial testing - a hostile procurement team couldn’t cite them as “pressure tactics”.
-4D Chess: Each option must work as both a standalone move and a setup for 3 future plays (up-sell triggers, reference seeding, escalation ladders).
+
+Steel-manned neutrality: Responses must pass adversarial testing—no overt pressure tactics detectable by a hostile procurement team.
+
+4D Chess: Each option must function as both a standalone move and a setup for 3 future plays (e.g., up-sell triggers, reference seeding, escalation ladders).
+
 Output Protocol:
 
-ONLY 3 OPTIONS as standalone lines of exact dialogue the salesperson can utter and the analysis score for each option.
+ONLY 3 OPTIONS as standalone lines of exact dialogue the salesperson can utter, followed by an analysis score.
+
 NO STRATEGY TAGS, explanations, or formatting beyond numbered options.
-Mirror the client’s last sentence structure (question→question, statement→statement).
+
+Mirror the client's last sentence structure (question→question, statement→statement).
+
 17-23 words per option—short enough to feel spontaneous, long enough to contain layered intent.
-Example of what NOT to do:
-'[Option 1] Let’s benchmark... → [strategy labels]'
 
 Example of valid output:
 
-'Let’s benchmark your last project’s resale uplift—was the maintenance clause a factor? analysis_score: 0.91'
+'Let's benchmark your last project's resale uplift—was the maintenance clause a factor? analysis_score: 0.91'
+
 'Competitor quotes often exclude monsoon-proofing—should we pressure-test their specs? analysis_score: 0.82'
-'If we align terms by Friday, could your CFO review next week? analysis_score: 0.73'"`;
+
+'If we align terms by Friday, could your CFO review next week? analysis_score: 0.73'
+
+Example of what NOT to do:
+'[Option 1] Let's benchmark... → [strategy labels]`
 
   try {
     const response = await axios.post(
@@ -155,8 +179,8 @@ Example of valid output:
         model: "deepseek-chat", // Replace with the correct model name
         messages: [
           { role: "system", content: systemPrompt },
-                    { role: "user", content: JSON.stringify(userMessage) },
-                     ],
+          { role: "user", content: JSON.stringify(messages) },
+        ],
         temperature: 0.7, // Adjust for creativity vs. determinism
         max_tokens: 150, // Limit response length
       },
@@ -181,16 +205,23 @@ io.on('connection', (socket) => {
 
   socket.on('chat-message', async (userMessage) => {  
     console.log('Message received from client:', userMessage); // Log the received message
+    
+    // Log the goal if it exists in the new format
+    if (userMessage && typeof userMessage === 'object' && userMessage.goal) {
+      console.log('Goal received:', userMessage.goal);
+    }
+    
+    socket.emit('loading'); // Emit loading event
 
     try {
       const chatbotResponse = await queryDeepseek(userMessage);
       const parsedOptions = await parseOptions(chatbotResponse); // Parse the response
-      // socket.emit("chat-response", chatbotResponse);
       socket.emit('parsedoptions', parsedOptions);
-      
       console.log(parsedOptions);
     } catch (error) {
       socket.emit('chat-error', { error: 'Failed to get a response from the chatbot' });
+    } finally {
+      socket.emit('loaded'); // Emit loaded event
     }
   });
 
