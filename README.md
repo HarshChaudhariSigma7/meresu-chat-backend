@@ -62,8 +62,7 @@ The server listens for various events from connected clients:
 - `connection`: Handles new client connections
 - `disconnect`: Manages client disconnections
 - `chat-message`: Processes incoming chat messages and goals
-- `request-parsed-options`: Responds to requests for previously parsed options
-
+- `request-parsed-options`: Responds to requests for previously parsed option
 ### Key Functions
 - `queryDeepseek(userMessage)`: Sends the conversation context and goal to the Groq API and returns the AI response
 - `parseOptions(text)`: Parses the AI response to extract structured options with scores
